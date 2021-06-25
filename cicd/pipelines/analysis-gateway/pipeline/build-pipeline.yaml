@@ -68,7 +68,7 @@ spec:
           workspace: maven-settings
         - name: source
           workspace: shared-workspace
-        - name: source
+        - name: maven-local-repo
           workspace: maven-local-repo
 
 

@@ -1,17 +1,6 @@
 #!/bin/bash
 set -x 
 
-_NEXUS_PWD=$4
-_NEXUS_URL=$5
-
-
-OLD_PASSWORD=$(cat /nexus-data/admin.password)
-NEW_PASSWORD=${_NEXUS_PWD}
-
-curl -ifu admin:"${OLD_PASSWORD}" \
-  -XPUT -H 'Content-Type: text/plain' \
-  --data "${NEW_PASSWORD}" \
-  ${_NEXUS_URL}/service/rest/v1/security/users/admin
 
 #
 # add_nexus3_repo [repo-id] [repo-url] [nexus-username] [nexus-password] [nexus-url]
