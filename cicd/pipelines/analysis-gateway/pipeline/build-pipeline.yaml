@@ -1,0 +1,173 @@
+apiVersion: tekton.dev/v1alpha1
+kind: Pipeline
+metadata:
+  name: build-analysis-gateway
+  labels:
+    app: analysis-gateway
+spec:
+  params:
+    - default: analysis-test
+      description: Namespace for deploy dev tests
+      name: PROJECT_DEV
+      type: string
+    - default: latest
+      description: Image Tag Value
+      name: IMAGE_TAG
+      type: string
+    - default: quay.io/luisarizmendi/analysis-gateway
+      name: registry-repository
+      type: string
+    - default: latest
+      name: registry-image-tag-name
+      type: string
+    - default: webhook-secret
+      description: webhook secret name
+      name: webhook-secret
+      type: string
+  resources:
+    - name: app-git
+      type: git
+    - name: image
+      type: image
+  tasks:
+    - name: git-clone
+      params:
+        - name: url
+          value: 'https://github.com/luisarizmendi/analysis-gateway'
+        - name: subdirectory
+          value: ''
+        - name: deleteExisting
+          value: 'true'
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+
+
+
+    - name: maven
+      params:
+        - name: CONTEXT_DIR
+          value: .
+        - name: MAVEN_MIRROR_URL
+          value: "http://nexus:8081/nexus/content/groups/public"
+        - name: GOALS
+          value:
+            - '-DskipTests'
+            - clean
+            - package
+      runAfter:
+        - git-clone
+      taskRef:
+        kind: Task
+        name: maven-local-repo
+      workspaces:
+        - name: maven-settings
+          workspace: maven-settings
+        - name: source
+          workspace: shared-workspace
+        - name: source
+          workspace: maven-local-repo
+
+
+
+    - name: code-analysis
+      params:
+        - name: SONAR_HOST_URL
+          value: http://sonarqube:9000
+        - name: SONAR_PROJECT_KEY
+          value: analysis-gateway
+      workspaces:
+        - name: source-dir
+          workspace: shared-workspace
+        - name: sonar-settings
+          workspace: sonar-settings
+      runAfter:
+        - maven
+      taskRef:
+        kind: Task
+        name: sonarqube-scanner
+
+
+
+
+
+
+    - name: build-java-app-image
+      params:
+        - name: CONTEXT
+          value: .
+        - name: DOCKERFILE
+          value: src/main/docker/Dockerfile.jvm
+        - name: IMAGE
+          value: >-
+            image-registry.openshift-image-registry.svc:5000/analysis-cicd/analysis-gateway:$(params.IMAGE_TAG)
+        - name: TLSVERIFY
+          value: 'false'
+      runAfter:
+        - maven
+      taskRef:
+        kind: ClusterTask
+        name: buildah
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+
+
+
+
+
+    - name: tag-test-image
+      params:
+        - name: ARGS
+          value:
+            - tag
+            - 'analysis-gateway:$(params.IMAGE_TAG)'
+            - 'analysis-gateway:latest'
+      runAfter:
+        - build-java-app-image
+      taskRef:
+        kind: ClusterTask
+        name: openshift-client
+    - name: push-to-test-env
+      params:
+        - name: ARGS
+          value:
+            - patch
+            - deployment/analysis-gateway
+            - --patch={"spec":{"template":{"spec":{"containers":[{"name":"analysis-gateway","image":"image-registry.openshift-image-registry.svc:5000/analysis-cicd/analysis-gateway:$(params.IMAGE_TAG)"}]}}}}
+            - '-n'
+            - $(params.PROJECT_DEV)
+      runAfter:
+        - tag-test-image
+      taskRef:
+        kind: ClusterTask
+        name: openshift-client
+    - name: send-to-webhook-slack
+      params:
+        - name: webhook-secret
+          value: $(params.webhook-secret)
+        - name: message
+          value: >-
+            Pipeline image build waiting to be reviewed 
+            $(params.registry-repository):$(params.registry-image-tag-name)
+      runAfter:
+        - push-to-test-env
+        - code-analysis
+      taskRef:
+        kind: Task
+        name: send-to-webhook-slack
+
+
+  workspaces:
+    - name: shared-workspace
+    - name: maven-settings
+    - name: sonar-settings
+    - name: maven-local-repo
+
+
+
+
