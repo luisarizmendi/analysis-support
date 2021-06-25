@@ -46,7 +46,6 @@ spec:
           workspace: shared-workspace
 
 
-
     - name: maven
       params:
         - name: CONTEXT_DIR
@@ -72,6 +71,26 @@ spec:
           workspace: maven-local-repo
 
 
+    - name: release-app
+      taskRef:
+        kind: Task
+        name: maven-local-repo
+      runAfter:
+        - maven
+      workspaces:
+        - name: maven-settings
+          workspace: maven-settings
+        - name: source
+          workspace: shared-workspace
+        - name: maven-local-repo
+          workspace: maven-local-repo
+      params:
+      - name: GOALS
+        value:
+        - deploy
+        - -DskipTests=true
+        - -DaltDeploymentRepository=nexus::default::http://admin:admin123@nexus:8081/repository/maven-snapshots/
+        - -DaltSnapshotDeploymentRepository=nexus::default::http://admin:admin123@nexus:8081/repository/maven-snapshots/
 
     - name: code-analysis
       params:
@@ -107,7 +126,8 @@ spec:
         - name: TLSVERIFY
           value: 'false'
       runAfter:
-        - maven
+        - release-app
+        - code-analysis
       taskRef:
         kind: ClusterTask
         name: buildah
@@ -132,6 +152,8 @@ spec:
       taskRef:
         kind: ClusterTask
         name: openshift-client
+
+
     - name: push-to-test-env
       params:
         - name: ARGS
@@ -146,6 +168,33 @@ spec:
       taskRef:
         kind: ClusterTask
         name: openshift-client
+
+
+
+    - name: int-test
+      taskRef:
+        name: openshift-client
+        kind: ClusterTask
+      runAfter:
+        - push-to-test-env
+      params:
+      - name: SCRIPT
+        value: |
+            sleep $(($RANDOM % 40 + 20))
+
+    - name: perf-test
+      taskRef:
+        name: openshift-client
+        kind: ClusterTask
+      runAfter:
+        - push-to-test-env
+      params:
+      - name: SCRIPT
+        value: |
+            sleep $(($RANDOM % 40 + 20))
+
+
+
     - name: send-to-webhook-slack
       params:
         - name: webhook-secret
@@ -155,8 +204,8 @@ spec:
             Pipeline image build waiting to be reviewed 
             $(params.registry-repository):$(params.registry-image-tag-name)
       runAfter:
-        - push-to-test-env
-        - code-analysis
+        - int-test
+        - perf-test
       taskRef:
         kind: Task
         name: send-to-webhook-slack
