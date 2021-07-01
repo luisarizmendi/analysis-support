@@ -1,0 +1,151 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: analysis-promote-pipeline
+spec:
+  params:
+    - default: analysis-prod
+      description: Namespace where to deploy the new build
+      name: PROJECT_PROD
+      type: string
+    - default: dev
+      name: registry-image-tag-name
+      type: string
+    - default: https://github.com/luisarizmendi/analysis-core
+      description: Git repository
+      name: git-repository
+      type: string
+    - default: quay.io/luisarizmendi/analysis-core
+      description: Image registry
+      name: registry-repository
+      type: string
+    - default: analysis-core
+      description: Application name
+      name: app-name
+      type: string
+    - default: registry-auth-secret
+      description: Secret with registry credentials
+      name: registry-secret
+      type: string
+    - default: webhook-secret
+      description: webhook secret name
+      name: webhook-secret
+      type: string
+  tasks:
+    - name: git-clone
+      params:
+        - name: url
+          value: $(params.git-repository)
+        - name: subdirectory
+          value: ''
+        - name: deleteExisting
+          value: 'true'
+        - name: revision
+          value: $(params.registry-image-tag-name)
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+
+
+    - name: maven
+      params:
+        - name: CONTEXT_DIR
+          value: .
+        - name: GOALS
+          value:
+            - '-DskipTests'
+            - clean
+            - package
+      runAfter:
+        - git-clone
+      taskRef:
+        kind: Task
+        name: maven-local-repo
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: maven-local-repo
+          workspace: maven-local-repo
+        - name: maven-settings
+          workspace: maven-settings
+
+
+    - name: build-image
+      params:
+        - name: CONTEXT
+          value: .
+        - name: DOCKERFILE
+          value: src/main/docker/Dockerfile.jvm
+        - name: IMAGE
+          value: >-
+            image-registry.openshift-image-registry.svc:5000/analysis-cicd/$(params.app-name):$(params.registry-image-tag-name)
+        - name: TLSVERIFY
+          value: 'false'
+      runAfter:
+        - maven
+      taskRef:
+        kind: ClusterTask
+        name: buildah
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: push-image-to-registry
+      params:
+        - name: app-name
+          value: $(params.app-name)
+        - name: registry-repository
+          value: $(params.registry-repository)
+        - name: registry-image-tag-name
+          value: $(params.registry-image-tag-name)
+      runAfter:
+        - build-image
+      taskRef:
+        kind: Task
+        name: push-image-to-registry
+
+
+    - name: deploy-to-prod-env
+      params:
+        - name: ARGS
+          value:
+            - patch
+            - deployment/$(params.app-name)
+            - --patch={"spec":{"template":{"spec":{"containers":[{"name":"$(params.app-name)","image":"$(params.registry-repository):$(params.registry-image-tag-name)"}]}}}}
+            - '-n'
+            - $(params.PROJECT_PROD)
+      runAfter:
+        - push-image-to-registry
+      taskRef:
+        kind: ClusterTask
+        name: openshift-client
+
+
+    - name: send-to-webhook-slack
+      params:
+        - name: webhook-secret
+          value: $(params.webhook-secret)
+        - name: message
+          value: >-
+            New $(params.app-name) version released to prodution 
+      runAfter:
+        - deploy-to-prod-env
+      taskRef:
+        kind: Task
+        name: send-to-webhook-slack
+
+
+  workspaces:
+    - name: shared-workspace
+    - name: maven-local-repo
+    - name: maven-settings
+
+
+
+
+
+
+

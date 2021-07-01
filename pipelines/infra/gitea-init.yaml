@@ -77,7 +77,7 @@
               "branch_filter": "dev",
               "type": "gitea",
               "config": {
-                "url": "http://el-analysis-gateway-dev-listener-interceptor.analysis-cicd.svc.cluster.local:8080/hooks",
+                "url": "http://el-${REPO_NAME}-dev-listener-interceptor.analysis-cicd.svc.cluster.local:8080/hooks",
                 "content_type": "json"
               },
               "events": [
@@ -104,7 +104,7 @@
               "branch_filter": "main",
               "type": "gitea",
               "config": {
-                "url": "http://el-analysis-gateway-main-listener-interceptor.analysis-cicd.svc.cluster.local:8080/hooks",
+                "url": "http://el-${REPO_NAME}-main-listener-interceptor.analysis-cicd.svc.cluster.local:8080/hooks",
                 "content_type": "json"
               },
               "events": [

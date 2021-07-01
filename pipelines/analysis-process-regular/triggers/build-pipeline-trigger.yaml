@@ -1,31 +1,15 @@
 apiVersion: triggers.tekton.dev/v1alpha1
 kind: EventListener
 metadata:
- name: analysis-gateway-dev-listener-interceptor
+ name: analysis-process-regular-dev-listener-interceptor
 spec:
  serviceAccountName: pipeline
  triggers:
    - name: GitHub-listener
      bindings:
-       - ref: git-push-pipeline-binding
+       - ref: analysis-process-regular-git-push-pipeline-binding
      template:
-       name: analysis-gateway-trigger-build-pipeline-template
-
-
----
-
-apiVersion: triggers.tekton.dev/v1alpha1
-kind: EventListener
-metadata:
- name: analysis-gateway-main-listener-interceptor
-spec:
- serviceAccountName: pipeline
- triggers:
-   - name: GitHub-listener
-     bindings:
-       - ref: git-pull-request-pipeline-binding
-     template:
-       name: analysis-gateway-trigger-promote-pipeline-template
+       name: analysis-process-regular-trigger-build-pipeline-template
 
 
 
@@ -36,7 +20,7 @@ spec:
 apiVersion: triggers.tekton.dev/v1alpha1
 kind: TriggerBinding
 metadata:
- name: git-push-pipeline-binding
+ name: analysis-process-regular-git-push-pipeline-binding
 spec:
  params:
  - name: gitrepository
@@ -44,18 +28,6 @@ spec:
  - name: gitid
    value: $(body.after)
 
-
----
-apiVersion: triggers.tekton.dev/v1alpha1
-kind: TriggerBinding
-metadata:
- name: git-pull-request-pipeline-binding
-spec:
- params:
- - name: gitrepository
-   value: $(body.repository.full_name)
- - name: gitid
-   value: $(body.after)
 
 
 ---
@@ -63,7 +35,7 @@ spec:
 apiVersion: triggers.tekton.dev/v1alpha1
 kind: TriggerTemplate
 metadata:
- name: analysis-gateway-trigger-build-pipeline-template
+ name: analysis-process-regular-trigger-build-pipeline-template
 spec:
  params:
  - name: gitrepository
@@ -72,10 +44,10 @@ spec:
  - apiVersion: tekton.dev/v1beta1
    kind: PipelineRun
    metadata:
-     generateName: build-analysis-gateway-
+     generateName: build-analysis-process-regular-
      namespace: analysis-cicd
      labels:
-       app: analysis-gateway
+       app: analysis-process-regular
        tekton.dev/pipeline: analysis-build-pipeline
    spec:
      params:
@@ -86,7 +58,7 @@ spec:
        - name: git-repository
          value: http://gitea:3000/$(tt.params.gitrepository)
        - name: app-name
-         value: analysis-gateway
+         value: analysis-process-regular
        - name: title
          value: "Pull-request for revision id $(tt.params.gitid)"
      pipelineRef:
@@ -96,13 +68,13 @@ spec:
      workspaces:
        - name: shared-workspace
          persistentVolumeClaim:
-           claimName: analysis-gateway-shared-workspace
+           claimName: analysis-process-regular-shared-workspace-build
        - configMap:
            name: maven-settings
          name: maven-settings
        - name: maven-local-repo
          persistentVolumeClaim:
-           claimName: analysis-gateway-maven-local-repo
+           claimName: analysis-process-regular-maven-local-repo
 
 
 

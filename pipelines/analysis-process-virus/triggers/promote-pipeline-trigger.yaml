@@ -1,0 +1,82 @@
+
+
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: EventListener
+metadata:
+ name: analysis-process-virus-main-listener-interceptor
+spec:
+ serviceAccountName: pipeline
+ triggers:
+   - name: GitHub-listener
+     bindings:
+       - ref: analysis-process-virus-git-pull-request-pipeline-binding
+     template:
+       name: analysis-process-virus-trigger-promote-pipeline-template
+
+
+
+
+
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerBinding
+metadata:
+ name: analysis-process-virus-git-pull-request-pipeline-binding
+spec:
+ params:
+ - name: gitrepository
+   value: $(body.repository.full_name)
+ - name: gitid
+   value: $(body.after)
+
+
+
+
+---
+
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+ name: analysis-process-virus-trigger-promote-pipeline-template
+spec:
+ params:
+ - name: gitrepository
+ - name: gitid
+ resourcetemplates:
+ - apiVersion: tekton.dev/v1beta1
+   kind: PipelineRun
+   metadata:
+     generateName: promote-analysis-process-virus-
+     namespace: analysis-cicd
+     labels:
+       app: analysis-process-virus
+       tekton.dev/pipeline: analysis-promote-pipeline
+   spec:
+     params:
+       - name: PROJECT_PROD
+         value: analysis-prod
+       - name: registry-image-tag-name
+         value: $(tt.params.gitid)
+       - name: git-repository
+         value: http://gitea:3000/$(tt.params.gitrepository)
+       - name: registry-repository
+         value: quay.io/luisarizmendi/analysis-process-virus
+       - name: app-name
+         value: analysis-process-virus
+       - name: title
+         value: "Pull-request for revision id $(tt.params.gitid)"
+     pipelineRef:
+       name: analysis-promote-pipeline
+     serviceAccountName: pipeline
+     timeout: 1h0m0s
+     workspaces:
+       - name: shared-workspace
+         persistentVolumeClaim:
+           claimName: analysis-process-virus-shared-workspace-promote
+       - emptyDir: {}
+         name: maven-settings
+       - name: maven-local-repo
+         persistentVolumeClaim:
+           claimName: analysis-process-virus-maven-local-repo
+
+

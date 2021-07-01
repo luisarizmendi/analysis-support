@@ -12,9 +12,6 @@ spec:
       description: Image Tag Value
       name: IMAGE_TAG
       type: string
-    - default: dev
-      name: registry-image-tag-name
-      type: string
     - default: https://github.com/luisarizmendi/analysis-core
       description: Git repository
       name: git-repository
@@ -27,10 +24,10 @@ spec:
       description: A title for the build
       name: title
       type: string
-#    - default: webhook-secret
-#      description: webhook secret name
-#      name: webhook-secret
-#      type: string
+    - default: webhook-secret
+      description: webhook secret name
+      name: webhook-secret
+      type: string
   tasks:
     - name: git-clone
       params:
@@ -211,30 +208,18 @@ spec:
           value: $(params.title)
 
 
-#    - name: send-to-webhook-slack
-#      params:
-#        - name: webhook-secret
-#          value: $(params.webhook-secret)
-#        - name: message
-#          value: >-
-#            Pipeline image build waiting to be reviewed 
-#      runAfter:
-#        - pull-request
-#      taskRef:
-#        kind: Task
-#        name: send-to-webhook-slack
-
-
     - name: send-to-webhook-slack
-      taskRef:
-        name: openshift-client
-        kind: ClusterTask
+      params:
+        - name: webhook-secret
+          value: $(params.webhook-secret)
+        - name: message
+          value: >-
+            Pipeline $(params.app-name) image build waiting to be reviewed 
       runAfter:
         - pull-request
-      params:
-      - name: SCRIPT
-        value: |
-            sleep $(($RANDOM % 40 + 20))
+      taskRef:
+        kind: Task
+        name: send-to-webhook-slack
 
   workspaces:
     - name: shared-workspace
