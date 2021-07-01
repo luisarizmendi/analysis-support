@@ -143,7 +143,7 @@ oc -n analysis-cicd create -f  ./common-functions/pipeline/analysis-promote-pipe
 
 **Configure pvc to share content across tasks**
 ```
-for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus analysis-domain
+for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus 
 do
     oc -n analysis-cicd create -f ./$i/pvc/build-shared-workspace.yaml
     oc -n analysis-cicd create -f ./$i/pvc/promote-shared-workspace.yaml
@@ -154,9 +154,11 @@ done
 
 **Create Triggers**
 ```
-for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus analysis-domain
+for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus 
 do
     oc -n analysis-cicd create -f  ./$i/triggers/build-pipeline-trigger.yaml
     oc -n analysis-cicd create -f  ./$i/triggers/promote-pipeline-trigger.yaml
 done
 ```
+
+

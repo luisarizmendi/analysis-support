@@ -51,7 +51,7 @@
 
             REPO_BASE="https://github.com/luisarizmendi/"
 
-            for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus  analysis-domain
+            for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus  
             do
                 REPO_NAME=$i
 
