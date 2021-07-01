@@ -1,0 +1,144 @@
+  apiVersion: batch/v1
+  kind: Job
+  metadata:
+    labels:
+      app.kubernetes.io/part-of: gitea
+    name: gitea-configuration
+  spec:
+    activeDeadlineSeconds: 400
+    completions: 1
+    parallelism: 1
+    template:
+      spec:
+        containers:
+        - command:
+          - /bin/bash
+          - -x
+          - -c
+          - |           
+            GITEA_SVC=gitea
+            GITEA_USER=gitea
+            GITEA_PWD=gitea
+
+            status=""
+            while [ "$status" != "Running" ]
+            do
+              POD_NAME=$(oc get pod | grep gitea | grep -v deploy | grep -v config | grep -v postgres | awk '{print $1}')
+
+              status=$(oc get pod $POD_NAME | tail -n1 | awk '{print $3}')
+              sleep 10
+            done
+
+            # Try 10 times to create the admin user. Fail after that.
+            for i in {1..10};
+            do
+              # Create default admin user
+              oc exec $POD_NAME -- bash -c "giteacmd admin user create --username $GITEA_USER --password $GITEA_PWD --email gitea@gitea.local --must-change-password=false --admin "
+            
+            
+              if [ $? == "0" ] 
+              then
+                echo "SUCCESS: Created gitea admin user"
+                break
+              fi
+              # Sleep between each attempt
+              sleep 10
+            done
+
+
+            TOKEN=$(curl -XPOST -H "Content-Type: application/json"  -k -d '{"name":"init"}' -u gitea:gitea http://gitea:3000/api/v1/users/gitea/tokens | awk -F ':' '{print $4}' | awk -F '"' '{print $2}')
+
+
+            REPO_BASE="https://github.com/luisarizmendi/"
+
+            for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus  analysis-domain
+            do
+                REPO_NAME=$i
+
+            cat <<EOF > /tmp/data.json
+            {
+              "clone_addr": "${REPO_BASE}${REPO_NAME}",
+              "repo_name": "${REPO_NAME}"
+            }
+            EOF
+
+                RETURN=$(curl -o /tmp/curl.log -sL -w "%{http_code}" -H "Content-Type: application/json" \
+                              -H "Authorization: token $TOKEN" \
+                              -X POST http://$GITEA_SVC:3000/api/v1/repos/migrate -d @/tmp/data.json)
+
+                if [ $RETURN != "201" ] ;then
+                  echo "ERROR: Failed to clone repository ${REPO_BASE}${REPO_NAME}"
+                  cat /tmp/curl.log
+                  exit 255
+                fi
+
+            cat <<EOF > /tmp/data.json
+            {
+              "branch_filter": "dev",
+              "type": "gitea",
+              "config": {
+                "url": "http://el-analysis-gateway-dev-listener-interceptor.analysis-cicd.svc.cluster.local:8080/hooks",
+                "content_type": "json"
+              },
+              "events": [
+                "push"
+              ],
+              "active": true
+            }
+            EOF
+
+
+                RETURN=$(curl -o /tmp/curl.log -sL -w "%{http_code}" -H "Content-Type: application/json" \
+                              -H "Authorization: token $TOKEN" \
+                              -X POST http://$GITEA_SVC:3000/api/v1/repos/gitea/${REPO_NAME}/hooks -d @/tmp/data.json)
+
+                if [ $RETURN != "201" ] ; then
+                  echo "ERROR: Failed to set webhook in repository ${REPO_BASE}${REPO_NAME} branch dev "
+                  cat /tmp/curl.log
+                  exit 255
+                fi
+
+
+            cat <<EOF > /tmp/data.json
+            {
+              "branch_filter": "main",
+              "type": "gitea",
+              "config": {
+                "url": "http://el-analysis-gateway-main-listener-interceptor.analysis-cicd.svc.cluster.local:8080/hooks",
+                "content_type": "json"
+              },
+              "events": [
+                "push"
+              ],
+              "active": true
+            }
+            EOF
+
+
+                RETURN=$(curl -o /tmp/curl.log -sL -w "%{http_code}" -H "Content-Type: application/json" \
+                              -H "Authorization: token $TOKEN" \
+                              -X POST http://$GITEA_SVC:3000/api/v1/repos/gitea/${REPO_NAME}/hooks -d @/tmp/data.json)
+
+                if [ $RETURN != "201" ] ; then
+                  echo "ERROR: Failed to set webhook in repository ${REPO_BASE}${REPO_NAME} branch main "
+                  cat /tmp/curl.log
+                  exit 255
+                fi
+
+
+
+            done
+            sleep 5
+
+
+
+
+            
+
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          name: gitea-configuration-job
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        restartPolicy: Never
+        serviceAccountName: pipeline

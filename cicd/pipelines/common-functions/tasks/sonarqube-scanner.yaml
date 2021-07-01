@@ -20,7 +20,6 @@ spec:
 
   workspaces:
     - name: source-dir
-    - name: sonar-settings
   params:
     - name: SONAR_HOST_URL
       description: Host URL where the sonarqube server is running
@@ -50,10 +49,10 @@ spec:
           fi
         }
 
-        if [[ -f $(workspaces.sonar-settings.path)/sonar-project.properties ]]; then
-          echo "using user provided sonar-project.properties file"
-          cp -R $(workspaces.sonar-settings.path)/sonar-project.properties $(workspaces.source-dir.path)/sonar-project.properties
-        fi
+        #if [[ -f $(workspaces.sonar-settings.path)/sonar-project.properties ]]; then
+        #  echo "using user provided sonar-project.properties file"
+        #  cp -R $(workspaces.sonar-settings.path)/sonar-project.properties $(workspaces.source-dir.path)/sonar-project.properties
+        #fi
 
         if [[ -f $(workspaces.source-dir.path)/sonar-project.properties ]]; then
           if [[ -n "$(params.SONAR_HOST_URL)" ]]; then

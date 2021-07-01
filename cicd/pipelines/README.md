@@ -30,6 +30,11 @@ oc policy add-role-to-group system:image-puller system:serviceaccounts:analysis-
 oc adm policy add-role-to-user admin system:serviceaccount:analysis-cicd:pipeline -n analysis-test
 ```
 
+GITEA image make use of a supervisor process (s6) to configure and launch the several services ( ss, gitea, ...), and this supervisor need to be run under root so we need to permit it:
+
+```
+oc adm policy add-scc-to-user anyuid system:serviceaccount:analysis-cicd:gitea -n analysis-cicd
+```
 
 **POD updating the registry image needs to be privileged**  
 
@@ -58,7 +63,7 @@ oc create secret generic -n analysis-cicd webhook-secret --from-literal=url=<you
 ```
 
 ```
-oc create -f event-notification/send-to-webhook-slack.yaml -n analysis-cicd
+oc create -f ./common-functions/send-to-webhook-slack.yaml -n analysis-cicd
 ```
 
 
@@ -68,10 +73,19 @@ If you you don't have Sonarqube and Nexus in your environment yet:
 ```
 oc -n analysis-cicd create -f ../infra/sonarqube-template.yaml
 oc -n analysis-cicd create -f ../infra/nexus-template.yaml
+oc -n analysis-cicd create -f ../infra/gitea-template.yaml
 
-oc process -f ../infra/sonarqube-template.yaml | oc create -f -
-oc process -f ../infra/nexus-template.yaml | oc create -f -
+
+oc process -f ../infra/gitea-template.yaml | oc -n analysis-cicd create -f -
+oc process -f ../infra/sonarqube-template.yaml | oc -n analysis-cicd create -f -
+oc process -f ../infra/nexus-template.yaml | oc -n analysis-cicd create -f -
+
+
+oc create -n analysis-cicd -f ../infra/gitea-init.yaml
 ```
+
+
+
 
 
 **Create the maven settings file**
@@ -83,8 +97,11 @@ oc create -n analysis-cicd -f ./common-functions/configmap/maven-settings.yaml
 
 **Configure pvc to share content across tasks**
 ```
-oc -n analysis-cicd create -f ./<microservice>/pvc/build-shared-workspace.yaml
-oc -n analysis-cicd create -f ./<microservice>/pvc/maven-local-repo.yaml
+for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus analysis-domain
+do
+    oc -n analysis-cicd create -f ./$i/pvc/build-shared-workspace.yaml
+    oc -n analysis-cicd create -f ./$i/pvc/maven-local-repo.yaml
+done
 ```
 
 
@@ -92,6 +109,7 @@ oc -n analysis-cicd create -f ./<microservice>/pvc/maven-local-repo.yaml
 ```
 oc -n  analysis-cicd create -f ./common-functions/tasks/sonarqube-scanner.yaml
 oc -n  analysis-cicd create -f ./common-functions/tasks/maven-local-repo.yaml
+oc -n  analysis-cicd create -f ./common-functions/tasks/pull-request-gitea.yaml
 ```
 
 **Configure push image to registry task**
@@ -107,8 +125,16 @@ oc -n analysis-cicd create -f  ./<microservice>/resources/image-pipeline-resourc
 
 **Create Pipeline**
 ```
-oc -n analysis-cicd create -f  ./<microservice>/pipeline/build-pipeline.yaml
-oc -n analysis-cicd create -f  ./<microservice>/pipeline/promote-pipeline.yaml
-oc -n analysis-cicd create -f  ./<microservice>/pipeline/deploy-pipeline.yaml
+oc -n analysis-cicd create -f  ./common-functions/pipeline/analysis-build-pipeline.yaml
+oc -n analysis-cicd create -f  ./common-functions/pipeline/analysis-promote-pipeline.yaml
 ```
 
+
+**Create Triggers**
+```
+for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus analysis-domain
+do
+    oc -n analysis-cicd create -f  ./$i/triggers/build-pipeline-trigger.yaml
+    oc -n analysis-cicd create -f  ./$i/triggers/promote-pipeline-trigger.yaml
+done
+```

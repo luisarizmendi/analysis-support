@@ -1,0 +1,68 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: pull-request-gitea
+spec:
+  params:
+    - default: gitea
+      description: Gitea username
+      name: gitea-username
+      type: string
+    - default: gitea
+      description: Gitea pass
+      name: gitea-password
+      type: string
+    - default: "http://gitea:3000/gitea/analysis-core"
+      description: Gitea repo
+      name: gitea-repo
+      type: string
+    - default: "main"
+      description: Base
+      name: gitea-base
+      type: string
+    - default: "dev"
+      description: Head
+      name: gitea-head
+      type: string
+    - default: "Pull-request created by Tekton Pipelines"
+      description: "Pull-request title"
+      type: string
+      name: title
+  steps:
+    - command:
+        - /bin/bash
+        - -x
+        - -c
+        - |  
+          RANDOMID=$(($RANDOM))
+
+          GITEA_SERVER=$(echo $(params.gitea-repo)| awk -F / '{print $3}')
+          GITEA_REPO=$(echo $(params.gitea-repo)| awk -F / '{print $5}')
+
+          TOKEN=$(curl -XPOST -H "Content-Type: application/json"  -k -d "{\"name\":\"pull-request-${RANDOMID}\"}" -u $(params.gitea-username):$(params.gitea-password) http://$GITEA_SERVER/api/v1/users/$(params.gitea-username)/tokens | awk -F ':' '{print $4}' | awk -F '"' '{print $2}')
+
+          cat <<EOF > /tmp/data.json
+          {
+            "base": "$(params.gitea-base)",
+            "head": "$(params.gitea-head)",
+            "title": "$(params.title)"
+          }
+          EOF
+
+          RETURN=$(curl -o /tmp/curl.log -sL -w "%{http_code}" -H "Content-Type: application/json" \
+                        -H "Authorization: token $TOKEN" \
+                        -X POST http://$GITEA_SERVER/api/v1/repos/$(params.gitea-username)/$GITEA_REPO/pulls -d @/tmp/data.json)
+
+          if [ $RETURN != "201" ] ;then
+            echo "ERROR: Failed to create pull-request"
+            cat /tmp/curl.log
+            exit 255
+          fi
+
+
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      name: gitea-create-pull-request
+      resources: {}
+
+
+
