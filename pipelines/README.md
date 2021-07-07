@@ -71,8 +71,11 @@ If you you don't have Sonarqube and Nexus in your environment yet:
 oc -n analysis-cicd create -f infra/sonarqube-template.yaml
 oc -n analysis-cicd create -f infra/nexus-template.yaml
 oc -n analysis-cicd create -f infra/gitea-template.yaml
+oc -n analysis-cicd create -f infra/quay-minio-template.yaml
 
 
+
+oc process -f infra/quay-minio-template.yaml  | oc -n analysis-cicd create -f -
 oc process -f infra/gitea-template.yaml | oc -n analysis-cicd create -f -
 oc process -f infra/sonarqube-template.yaml | oc -n analysis-cicd create -f -
 oc process -f infra/nexus-template.yaml | oc -n analysis-cicd create -f -
@@ -80,6 +83,7 @@ oc process -f infra/nexus-template.yaml | oc -n analysis-cicd create -f -
 
 oc create -n analysis-cicd -f infra/gitea-init.yaml
 ```
+
 
 
 

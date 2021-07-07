@@ -1,0 +1,293 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: quay-standalone-template
+metadata:
+  name: quay-standalone
+  annotations:
+    description: Quay standalone
+    tags: ci,quay
+objects:
+
+
+## NOOBAA PART   
+- apiVersion: noobaa.io/v1alpha1
+  kind: NooBaa
+  metadata:
+    name: noobaa
+    namespace: ${STORAGE_NAMESPACE}
+  spec:
+    dbResources:
+      requests:
+        cpu: '0.1'
+        memory: 1Gi
+    dbType: postgres
+    coreResources:
+      requests:
+        cpu: '0.1'
+        memory: 1Gi
+
+- apiVersion: noobaa.io/v1alpha1
+  kind: BackingStore
+  metadata:
+    finalizers:
+    - noobaa.io/finalizer
+    labels:
+      app: noobaa
+    name: noobaa-pv-backing-store
+    namespace: ${STORAGE_NAMESPACE}
+  spec:
+    pvPool:
+      numVolumes: 1
+      resources:
+        requests:
+          storage:  ${STORAGE_SIZE} 
+      storageClass: ${STORAGE_CLASS_NAME} 
+    type: pv-pool
+
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: occli
+    namespace: ${STORAGE_NAMESPACE}
+
+- kind: RoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: occli-permission
+    namespace: ${STORAGE_NAMESPACE}
+  subjects:
+    - kind: ServiceAccount
+      name: occli
+      namespace: ${STORAGE_NAMESPACE}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: admin
+
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: occli
+
+- kind: RoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: occli-permission
+  subjects:
+    - kind: ServiceAccount
+      name: occli
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: admin
+
+- apiVersion: batch/v1
+  kind: Job
+  metadata:
+    namespace: ${STORAGE_NAMESPACE}
+    name: noobaa-patch
+  spec:
+    activeDeadlineSeconds: 400
+    completions: 1
+    parallelism: 1
+    template:
+      spec:
+        containers:
+        - command:
+          - /bin/bash
+          - -x
+          - -c
+          - |   
+            STATUS=""
+            while [ "$STATUS" != "Ready" ]
+            do
+              STATUS=$(oc get -n openshift-storage noobaas | awk '{print $5}' | tail -n 1)
+              sleep 10
+            done
+
+            oc patch -n openshift-storage bucketclass noobaa-default-bucket-class --patch '{"spec":{"placementPolicy":{"tiers":[{"backingStores":["noobaa-pv-backing-store"]}]}}}' --type merge -n openshift-storage
+
+            STATUS=""
+            while [ "$STATUS" != "Ready" ]
+            do
+              STATUS=$(oc get -n openshift-storage bucketclass | awk '{print $3}' | tail -n 1)
+              sleep 10
+            done
+
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          name: noobaa-patch-job
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        restartPolicy: Never
+        serviceAccountName: occli
+
+
+
+
+
+## QUAY PART   
+
+- apiVersion: objectbucket.io/v1alpha1
+  kind: ObjectBucketClaim
+  metadata:
+    name: quay-object
+    labels:
+      app: noobaa
+      bucket-provisioner: openshift-storage.noobaa.io-obc
+      noobaa-domain: openshift-storage.noobaa.io
+  spec:
+    additionalConfig:
+      bucketclass: noobaa-default-bucket-class
+    generateBucketName: quay
+    storageClassName: openshift-storage.noobaa.io
+
+
+
+- apiVersion: batch/v1
+  kind: Job
+  metadata:
+    name: quay-deploy
+  spec:
+    activeDeadlineSeconds: 64000
+    completions: 1
+    parallelism: 1
+    template:
+      spec:
+        containers:
+        - command:
+          - /bin/bash
+          - -x
+          - -c
+          - |   
+            bucket_name=""
+            while [ "$bucket_name" == "" ]
+            do
+              sleep 15
+              bucket_name=$(oc get objectbucketclaim  quay-object -o yaml| grep bucketName | awk -F ': ' '{print $2}' | grep -v {)
+            done
+
+            access_key=""
+            while [ "$access_key" == "" ]
+            do
+              sleep 5
+              access_key=$(oc get secret quay-object -o yaml | grep AWS_ACCESS_KEY_ID | awk -F ': ' '{print $2}' | grep -v { | base64 -d)
+            done
+
+            secret_key=""
+            while [ "$secret_key" == "" ]
+            do
+              sleep 5
+              secret_key=$(oc get secret quay-object -o yaml | grep AWS_SECRET_ACCESS_KEY | awk -F ': ' '{print $2}' | grep -v { | base64 -d)
+            done 
+
+            
+            cat <<EOF > /tmp/config.yaml
+            DISTRIBUTED_STORAGE_CONFIG:
+                default:
+                    - RHOCSStorage
+                    - access_key: $access_key
+                      bucket_name: $bucket_name
+                      hostname: s3.openshift-storage.svc
+                      is_secure: true
+                      port: "443"
+                      secret_key: $secret_key
+                      storage_path: /datastorage/registry
+            DISTRIBUTED_STORAGE_DEFAULT_LOCATIONS: []
+            DISTRIBUTED_STORAGE_PREFERENCE:
+                - default
+            ALLOW_PULLS_WITHOUT_STRICT_LOGGING: false
+            BROWSER_API_CALLS_XHR_ONLY: false
+            CREATE_PRIVATE_REPO_ON_PUSH: false
+            SUPER_USERS:
+                - quayadmin
+            AUTHENTICATION_TYPE: Database
+            DEFAULT_TAG_EXPIRATION: 2w
+            ENTERPRISE_LOGO_URL: /static/img/RH_Logo_Quay_Black_UX-horizontal.svg
+            FEATURE_BUILD_SUPPORT: false
+            FEATURE_DIRECT_LOGIN: true
+            FEATURE_MAILING: false
+            REGISTRY_TITLE: Red Hat Quay
+            REGISTRY_TITLE_SHORT: Red Hat Quay
+            TAG_EXPIRATION_OPTIONS:
+            - 2w
+            TEAM_RESYNC_STALE_TIME: 60m
+            TESTING: false
+            EOF
+
+            oc create secret generic quay-config --from-file config.yaml=/tmp/config.yaml
+
+            cat <<EOF > /tmp/quay.yaml
+            apiVersion: quay.redhat.com/v1
+            kind: QuayRegistry
+            metadata:
+              name: ${REGISTRY_NAME}
+            spec:
+              configBundleSecret: quay-config
+              components:
+                - kind: objectstorage
+                  managed: false
+            EOF
+
+            oc create -f  /tmp/quay.yaml
+
+
+            ## WAIT
+
+            QUAY_HOST="https://${REGISTRY_NAME}-quay-app"
+
+
+            RETURN=0
+            while [ $RETURN != "200" ]
+            do
+              echo "waiting for Quay..."
+              RETURN=$(curl -k -sL -o /dev/null -w "%{http_code}" $QUAY_HOST)
+              sleep 15
+            done
+
+
+
+
+            ## Create quayadmin user
+
+            X_CSRF_TOKEN=$(curl -k -c /tmp/cookie.txt $QUAY_HOST | grep window.__token | awk  -F "'" '{print $2}')
+
+            curl -b  /tmp/cookie.txt "$QUAY_HOST/api/v1/user/" \
+              -H "x-csrf-token: $X_CSRF_TOKEN" \
+              -H 'content-type: application/json;charset=UTF-8' \
+              --data-raw '{"username":"quayadmin","email":"quayadmin@quay.local","password":"password","repeatPassword":"password"}' \
+              --compressed \
+              --insecure
+
+
+
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          name: quay-config-preparation
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        restartPolicy: Never
+        serviceAccountName: occli
+
+
+parameters:
+- displayName: StorageClass
+  name: STORAGE_CLASS_NAME
+  required: true
+  value: managed-nfs-storage
+
+- displayName: Storage size
+  name: STORAGE_SIZE
+  required: true
+  value: 50Gi
+
+- displayName: Quay registry name
+  name: REGISTRY_NAME
+  required: true
+  value: myregistry
+
+- displayName: Storage namespace
+  name: STORAGE_NAMESPACE
+  required: true
+  value: openshift-storage
