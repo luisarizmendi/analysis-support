@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 
 oc new-project analysis-cicd
 
@@ -26,11 +27,15 @@ oc adm policy add-scc-to-user privileged -z pipeline -n  analysis-cicd
 oc -n analysis-cicd create -f infra/sonarqube-template.yaml
 oc -n analysis-cicd create -f infra/nexus-template.yaml
 oc -n analysis-cicd create -f infra/gitea-template.yaml
+oc -n analysis-cicd create -f infra/quay-standalone-template.yaml
 
 
+
+oc process -f infra/quay-standalone-template.yaml  | oc create -f -
 oc process -f infra/gitea-template.yaml | oc -n analysis-cicd create -f -
 oc process -f infra/sonarqube-template.yaml | oc -n analysis-cicd create -f -
 oc process -f infra/nexus-template.yaml | oc -n analysis-cicd create -f -
+
 
 
 oc create -n analysis-cicd -f infra/gitea-init.yaml
@@ -40,7 +45,13 @@ oc create -n analysis-cicd -f infra/gitea-init.yaml
 
 
 
-oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-server=myregistry --docker-username=analisys --docker-password=Passw0rd!
+oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-server=myregistry-quay-app:443 --docker-username=quayadmin --docker-password=password
+
+
+
+oc create secret docker-registry registry-auth-secret -n analysis-prod --docker-server=myregistry-quay-app:443 --docker-username=quayadmin --docker-password=password
+oc secrets link default registry-auth-secret -n analysis-prod --for=pull
+
 
 
 
@@ -65,7 +76,7 @@ oc -n analysis-cicd create -f  ./common-functions/pipeline/analysis-build-pipeli
 oc -n analysis-cicd create -f  ./common-functions/pipeline/analysis-promote-pipeline.yaml
 
 
-for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus analysis-domain
+for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus 
 do
     oc -n analysis-cicd create -f ./$i/pvc/build-shared-workspace.yaml
     oc -n analysis-cicd create -f ./$i/pvc/promote-shared-workspace.yaml
@@ -74,7 +85,7 @@ done
 
 
 
-for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus analysis-domain
+for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus 
 do
     oc -n analysis-cicd create -f  ./$i/triggers/build-pipeline-trigger.yaml
     oc -n analysis-cicd create -f  ./$i/triggers/promote-pipeline-trigger.yaml

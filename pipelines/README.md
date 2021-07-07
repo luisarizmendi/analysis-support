@@ -1,11 +1,11 @@
 # Tekton pipelines
 
-These are the desciptors to create the Pipelines for the Analysis App that are included in the Helm Chart. They are prepared to use a namespace named "analysis-cicd".
+These are the desciptors to create the Tekton Pipelines for the [Analysis App](https://github.com/luisarizmendi/analysis). "analysis-cicd".
 
 
 ## Pre-requisites
 
-You need a copy of the App in analysis-test and analisys-prod namespaces
+You need a copy of the App in analysis-test and analisys-prod namespaces and an analysis-cicd namespace where to create infra resources.
 
 
 ## Pipeline deployment
@@ -71,11 +71,11 @@ If you you don't have Sonarqube and Nexus in your environment yet:
 oc -n analysis-cicd create -f infra/sonarqube-template.yaml
 oc -n analysis-cicd create -f infra/nexus-template.yaml
 oc -n analysis-cicd create -f infra/gitea-template.yaml
-oc -n analysis-cicd create -f infra/quay-minio-template.yaml
+oc -n analysis-cicd create -f infra/quay-standalone-template.yaml
 
 
 
-oc process -f infra/quay-minio-template.yaml  | oc -n analysis-cicd create -f -
+oc process -f infra/quay-standalone-template.yaml  | oc create -f -
 oc process -f infra/gitea-template.yaml | oc -n analysis-cicd create -f -
 oc process -f infra/sonarqube-template.yaml | oc -n analysis-cicd create -f -
 oc process -f infra/nexus-template.yaml | oc -n analysis-cicd create -f -
@@ -98,6 +98,24 @@ Create a secret with your credentials:
 ```
 oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-server=<your-registry-server> --docker-username=<your-name> --docker-password=<your-pword> 
 ```
+
+If you want to use the Quay registry deployed with the default credentials:
+```
+oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-server=myregistry-quay-app --docker-username=quayadmin --docker-password=password
+```
+
+To use this secret for pulling images for pods in the production namespace, you must add the secret to your service account. The name of the service account in this example should match the name of the service account the pod uses. The default service account is default.
+
+Create the same secret in the production namespace and the set it up as pull secret:
+
+```
+oc create secret docker-registry registry-auth-secret -n analysis-prod --docker-server=myregistry-quay-app --docker-username=quayadmin --docker-password=password
+
+oc secrets link default registry-auth-secret -n analysis-prod --for=pull
+```
+
+
+
 
 
 **Configure slack webhook**  
