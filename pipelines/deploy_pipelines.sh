@@ -44,15 +44,18 @@ oc create -n analysis-cicd -f infra/gitea-init.yaml
 REGISTRY_URL=$(oc get route -n analysis-cicd myregistry-quay -o yaml | grep host: | awk '{print $2}' | tail -n 1)
 
 
-oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-server=$REGISTRY_URL:443 --docker-username=quayadmin --docker-password=password
+oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-server=$REGISTRY_URL --docker-username=quayadmin --docker-password=password
 
 
-oc create secret docker-registry registry-auth-secret -n analysis-prod --docker-server=$REGISTRY_URL:443 --docker-username=quayadmin --docker-password=password
+oc create secret docker-registry registry-auth-secret -n analysis-prod --docker-server=$REGISTRY_URL --docker-username=quayadmin --docker-password=password
 oc secrets link default registry-auth-secret -n analysis-prod --for=pull
 
 
 
-oc patch image.config.openshift.io/cluster -p '{"spec":{"allowedRegistriesForImport":[{"domainName":"'${REGISTRY_URL}:443'","insecure":true}],"registrySources":{"insecureRegistries":["'${REGISTRY_URL}:443'"]}}}' --type='merge'
+#oc patch image.config.openshift.io/cluster -p '{"spec":{"allowedRegistriesForImport":[{"domainName":"'${REGISTRY_URL}'","insecure":true}],"registrySources":{"insecureRegistries":["'${REGISTRY_URL}'"]}}}' --type='merge'
+
+oc patch image.config.openshift.io/cluster -p '{"spec":{"registrySources":{"insecureRegistries":["'${REGISTRY_URL}'"]}}}' --type='merge'
+
 
 
 
@@ -89,7 +92,7 @@ done
 for i in analysis-gateway analysis-core analysis-process-regular analysis-process-virus 
 do
     oc -n analysis-cicd create -f  ./$i/triggers/build-pipeline-trigger.yaml
-    sed "s/.*443\/quayadmin\/.*/         value: $REGISTRY_URL:443\/quayadmin\/$i/g" ./$i/triggers/promote-pipeline-trigger.yaml > /tmp/promote-pipeline-trigger.yaml
+    sed "s/.*443\/quayadmin\/.*/         value: $REGISTRY_URL\/quayadmin\/$i/g" ./$i/triggers/promote-pipeline-trigger.yaml > /tmp/promote-pipeline-trigger.yaml
     oc -n analysis-cicd create -f  /tmp/promote-pipeline-trigger.yaml
 done
 
