@@ -60,7 +60,7 @@ spec:
        - name: git-repository
          value: http://gitea:3000/$(tt.params.gitrepository)
        - name: registry-repository
-         value: myregistry-quay-app.analysis-cicd.svc:443/quayadmin/analysis-core
+         value: myregistry-quay-app:443/quayadmin/analysis-core
        - name: app-name
          value: analysis-core
        - name: title

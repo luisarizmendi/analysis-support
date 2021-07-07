@@ -91,7 +91,7 @@ oc create -n analysis-cicd -f infra/gitea-init.yaml
 
 
 
-**Set your registry credentials**  
+**Set your registry credentials and access**  
 
 Create a secret with your credentials:
 
@@ -101,7 +101,7 @@ oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-
 
 If you want to use the Quay registry deployed with the default credentials:
 ```
-oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-server=myregistry-quay-app.analysis-cicd.svc:443 --docker-username=quayadmin --docker-password=password
+oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-server=myregistry-quay-analysis-cicd.apps.<domain>:443 --docker-username=quayadmin --docker-password=password
 ```
 
 To use this secret for pulling images for pods in the production namespace, you must add the secret to your service account. The name of the service account in this example should match the name of the service account the pod uses. The default service account is default.
@@ -109,14 +109,34 @@ To use this secret for pulling images for pods in the production namespace, you 
 Create the same secret in the production namespace and the set it up as pull secret:
 
 ```
-oc create secret docker-registry registry-auth-secret -n analysis-prod --docker-server=myregistry-quay-app.analysis-cicd.svc:443 --docker-username=quayadmin --docker-password=password
+oc create secret docker-registry registry-auth-secret -n analysis-prod --docker-server=myregistry-quay-analysis-cicd.apps.<domain>:443  --docker-username=quayadmin --docker-password=password
 
 oc secrets link default registry-auth-secret -n analysis-prod --for=pull
 ```
 
+Since the registry has self-signed certificates you have to include it under the allowed insecure registries:
 
+```
+oc edit image.config.openshift.io/cluster
+```
 
+You have to include something like this:
 
+```
+...
+spec:
+  registrySources: 
+    insecureRegistries: 
+    - <registry>
+...
+```
+
+You can also use oc patch :
+
+```
+oc patch image.config.openshift.io/cluster -p \
+'{"spec":{"registrySources":{"insecureRegistries":["<registry>"]}}}' --type='merge'
+```
 
 **Configure slack webhook**  
 
