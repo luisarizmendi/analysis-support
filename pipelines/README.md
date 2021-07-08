@@ -63,37 +63,12 @@ oc adm policy add-scc-to-user privileged -z pipeline -n  analysis-cicd
 
 
 
-### Create CI/CD infrastructure 
-
-If you you don't have Sonarqube and Nexus in your environment yet:
-
-```
-oc -n analysis-cicd create -f infra/sonarqube-template.yaml
-oc -n analysis-cicd create -f infra/nexus-template.yaml
-oc -n analysis-cicd create -f infra/gitea-template.yaml
-oc -n analysis-cicd create -f infra/quay-standalone-template.yaml
-
-
-
-oc process -f infra/quay-standalone-template.yaml  | oc create -f -
-oc process -f infra/gitea-template.yaml | oc -n analysis-cicd create -f -
-oc process -f infra/sonarqube-template.yaml | oc -n analysis-cicd create -f -
-oc process -f infra/nexus-template.yaml | oc -n analysis-cicd create -f -
-
-
-oc create -n analysis-cicd -f infra/gitea-init.yaml
-```
-
-
-
-
-### Create common objects
-
-
 
 **Set your registry credentials and access**  
 
 Create a secret with your credentials:
+
+_NOTE_: If you plan to use the Quay registry deployed as part of the CI/CD infra, the registry URL should be something like <registry_name>.<namespace>.<apps>.<ocp_domain>
 
 ```
 oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-server=<your-registry-server> --docker-username=<your-name> --docker-password=<your-pword> 
@@ -114,7 +89,13 @@ oc create secret docker-registry registry-auth-secret -n analysis-prod --docker-
 oc secrets link default registry-auth-secret -n analysis-prod --for=pull
 ```
 
-Since the registry has self-signed certificates you have to include it under the allowed insecure registries:
+
+
+**Allow insecure registry**
+
+_NOTE_: This is better done at the begining since it will force some re-deployments in the cluster.
+
+If the registry has self-signed certificates (ie. if you are using the Quay registry deployed as part of the CI/CD infra) you have to include it under the allowed insecure registries:
 
 ```
 oc edit image.config.openshift.io/cluster
@@ -137,6 +118,45 @@ You can also use oc patch :
 oc patch image.config.openshift.io/cluster -p \
 '{"spec":{"registrySources":{"insecureRegistries":["<registry>"]}}}' --type='merge'
 ```
+
+It could take some time until all endpoints are available after this change
+
+
+
+
+### Create CI/CD infrastructure 
+
+You can add the templates and later create an instance from it:
+
+```
+oc -n analysis-cicd create -f infra/quay-standalone-template.yaml
+oc -n analysis-cicd create -f infra/sonarqube-template.yaml
+oc -n analysis-cicd create -f infra/nexus-template.yaml
+oc -n analysis-cicd create -f infra/gitea-template.yaml
+
+```
+
+Or just process the template and create the resulting objects:
+
+```
+oc process -f infra/quay-standalone-template.yaml  | oc create -f -
+oc process -f infra/gitea-template.yaml | oc -n analysis-cicd create -f -
+oc process -f infra/sonarqube-template.yaml | oc -n analysis-cicd create -f -
+oc process -f infra/nexus-template.yaml | oc -n analysis-cicd create -f -
+```
+
+There are some init tasks (create user and mirror repos) that must be done in source repository:
+
+```
+oc create -n analysis-cicd -f infra/gitea-init.yaml
+```
+
+
+
+
+### Create common objects
+
+
 
 **Configure slack webhook**  
 
@@ -202,5 +222,3 @@ do
     oc -n analysis-cicd create -f  ./$i/triggers/promote-pipeline-trigger.yaml
 done
 ```
-
-

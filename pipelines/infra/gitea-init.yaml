@@ -5,7 +5,7 @@
       app.kubernetes.io/part-of: gitea
     name: gitea-configuration
   spec:
-    activeDeadlineSeconds: 400
+    activeDeadlineSeconds: 64000
     completions: 1
     parallelism: 1
     template:
@@ -30,7 +30,7 @@
             done
 
             # Try 10 times to create the admin user. Fail after that.
-            for i in {1..10};
+            for i in {1..100};
             do
               # Create default admin user
               oc exec $POD_NAME -- bash -c "giteacmd admin user create --username $GITEA_USER --password $GITEA_PWD --email gitea@gitea.local --must-change-password=false --admin "

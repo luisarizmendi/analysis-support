@@ -82,6 +82,7 @@ objects:
     kind: ClusterRole
     name: admin
 
+
 - apiVersion: batch/v1
   kind: Job
   metadata:
@@ -182,14 +183,26 @@ objects:
               secret_key=$(oc get secret quay-object -o yaml | grep AWS_SECRET_ACCESS_KEY | awk -F ': ' '{print $2}' | grep -v { | base64 -d)
             done 
 
-            
+
+            cluster_domain=""
+            while [ "$cluster_domain" == "" ]
+            do              
+              oc create service clusterip test --tcp=5678:8080
+              oc create route edge --service=test
+              cluster_domain=$(oc get route test -o yaml | grep host: | awk '{print $2}' | tail -n 1 | cut -d "." -f 2-)
+              oc delete route test
+              oc delete service test
+            done
+
+
+
             cat <<EOF > /tmp/config.yaml
             DISTRIBUTED_STORAGE_CONFIG:
                 default:
                     - RHOCSStorage
                     - access_key: $access_key
                       bucket_name: $bucket_name
-                      hostname: s3.openshift-storage.svc
+                      hostname: s3-openshift-storage.$cluster_domain
                       is_secure: true
                       port: "443"
                       secret_key: $secret_key

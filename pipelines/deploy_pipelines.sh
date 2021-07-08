@@ -21,27 +21,39 @@ oc adm policy add-scc-to-user anyuid system:serviceaccount:analysis-cicd:gitea -
 oc adm policy add-scc-to-user privileged -z pipeline -n  analysis-cicd
 
 
+            cluster_domain=""
+            while [ "$cluster_domain" == "" ]
+            do              
+              oc create service clusterip test --tcp=5678:8080
+              oc create route edge --service=test
+              cluster_domain=$(oc get route test -o yaml | grep host: | awk '{print $2}' | tail -n 1 | cut -d "." -f 2-)
+              oc delete route test
+              oc delete service test
+              namespace=$(oc project | awk -F '"' '{print $2}')
+            done
 
 
 
-oc -n analysis-cicd create -f infra/sonarqube-template.yaml
-oc -n analysis-cicd create -f infra/nexus-template.yaml
-oc -n analysis-cicd create -f infra/gitea-template.yaml
-oc -n analysis-cicd create -f infra/quay-standalone-template.yaml
+REGISTRY_URL="myregistry.$namespace.$cluster_domain"
+
+#sleep 60
+#            REGISTRY_URL=""
+#            while [ "$REGISTRY_URL" == "" ]
+#            do
+#              echo "waiting for Quay route..."
+#              REGISTRY_URL=$(oc get route -n analysis-cicd myregistry-quay -o yaml | grep host: | awk '{print $2}' | tail -n 1)
+#              sleep 15
+#            done
 
 
 
-oc process -f infra/quay-standalone-template.yaml  | oc create -f -
-oc process -f infra/gitea-template.yaml | oc -n analysis-cicd create -f -
-oc process -f infra/sonarqube-template.yaml | oc -n analysis-cicd create -f -
-oc process -f infra/nexus-template.yaml | oc -n analysis-cicd create -f -
+
+#oc patch image.config.openshift.io/cluster -p '{"spec":{"allowedRegistriesForImport":[{"domainName":"'${REGISTRY_URL}'","insecure":true}],"registrySources":{"insecureRegistries":["'${REGISTRY_URL}'"]}}}' --type='merge'
+oc patch image.config.openshift.io/cluster -p '{"spec":{"registrySources":{"insecureRegistries":["'${REGISTRY_URL}'"]}}}' --type='merge'
 
 
+sleep 600
 
-oc create -n analysis-cicd -f infra/gitea-init.yaml
-
-
-REGISTRY_URL=$(oc get route -n analysis-cicd myregistry-quay -o yaml | grep host: | awk '{print $2}' | tail -n 1)
 
 
 oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-server=$REGISTRY_URL --docker-username=quayadmin --docker-password=password
@@ -52,9 +64,22 @@ oc secrets link default registry-auth-secret -n analysis-prod --for=pull
 
 
 
-#oc patch image.config.openshift.io/cluster -p '{"spec":{"allowedRegistriesForImport":[{"domainName":"'${REGISTRY_URL}'","insecure":true}],"registrySources":{"insecureRegistries":["'${REGISTRY_URL}'"]}}}' --type='merge'
 
-oc patch image.config.openshift.io/cluster -p '{"spec":{"registrySources":{"insecureRegistries":["'${REGISTRY_URL}'"]}}}' --type='merge'
+
+oc -n analysis-cicd create -f infra/quay-standalone-template.yaml
+oc -n analysis-cicd create -f infra/sonarqube-template.yaml
+oc -n analysis-cicd create -f infra/nexus-template.yaml
+oc -n analysis-cicd create -f infra/gitea-template.yaml
+
+
+oc process -f infra/quay-standalone-template.yaml  | oc create -f -
+oc process -f infra/gitea-template.yaml | oc -n analysis-cicd create -f -
+oc process -f infra/sonarqube-template.yaml | oc -n analysis-cicd create -f -
+oc process -f infra/nexus-template.yaml | oc -n analysis-cicd create -f -
+
+
+
+oc create -n analysis-cicd -f infra/gitea-init.yaml
 
 
 
