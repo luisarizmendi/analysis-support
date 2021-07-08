@@ -52,7 +52,14 @@ REGISTRY_URL="myregistry.$namespace.$cluster_domain"
 oc patch image.config.openshift.io/cluster -p '{"spec":{"registrySources":{"insecureRegistries":["'${REGISTRY_URL}'"]}}}' --type='merge'
 
 
-sleep 600
+STATUS=no
+while [ "$STATUS" != "" ]
+do
+ STATUS=$(oc get pod --all-namespaces | grep -v Complete | grep -v Runn  | grep -v READY )
+ sleep 10
+done
+
+#sleep 600
 
 
 
