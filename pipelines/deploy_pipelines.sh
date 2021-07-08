@@ -34,16 +34,16 @@ oc adm policy add-scc-to-user privileged -z pipeline -n  analysis-cicd
 
 
 
-REGISTRY_URL="myregistry-quay-insecure-$namespace.$cluster_domain"
+REGISTRY_URL="myregistry-quay-$namespace.$cluster_domain"
 
 sleep 60
-            REGISTRY_URL=""
-            while [ "$REGISTRY_URL" == "" ]
-            do
-              echo "waiting for Quay route..."
-              REGISTRY_URL=$(oc get route -n analysis-cicd myregistry-quay -o yaml | grep host: | awk '{print $2}' | tail -n 1)
-              sleep 15
-            done
+#            REGISTRY_URL=""
+#            while [ "$REGISTRY_URL" == "" ]
+#            do
+#              echo "waiting for Quay route..."
+#              REGISTRY_URL=$(oc get route -n analysis-cicd myregistry-quay -o yaml | grep host: | awk '{print $2}' | tail -n 1)
+#              sleep 15
+#            done
 
 
 #oc patch image.config.openshift.io/cluster -p '{"spec":{"allowedRegistriesForImport":[{"domainName":"'${REGISTRY_URL}'","insecure":true}],"registrySources":{"insecureRegistries":["'${REGISTRY_URL}'"]}}}' --type='merge'
