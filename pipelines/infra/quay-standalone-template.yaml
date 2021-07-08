@@ -125,9 +125,6 @@ objects:
         serviceAccountName: occli
 
 
-
-
-
 ## QUAY PART   
 
 - apiVersion: objectbucket.io/v1alpha1
@@ -202,9 +199,9 @@ objects:
                     - RHOCSStorage
                     - access_key: $access_key
                       bucket_name: $bucket_name
-                      hostname: s3-openshift-storage.$cluster_domain
-                      is_secure: true
-                      port: "443"
+                      hostname: s3.openshift-storage.svc
+                      is_secure: false
+                      port: "80"
                       secret_key: $secret_key
                       storage_path: /datastorage/registry
             DISTRIBUTED_STORAGE_DEFAULT_LOCATIONS: []
@@ -245,7 +242,6 @@ objects:
 
             oc create -f  /tmp/quay.yaml
 
-
             ## WAIT
 
             QUAY_HOST="https://${REGISTRY_NAME}-quay-app"
@@ -282,7 +278,6 @@ objects:
           terminationMessagePolicy: File
         restartPolicy: Never
         serviceAccountName: occli
-
 
 parameters:
 - displayName: StorageClass
