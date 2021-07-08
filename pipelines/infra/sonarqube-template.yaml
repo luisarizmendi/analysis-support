@@ -35,6 +35,26 @@ objects:
     type: ClusterIP
   status:
     loadBalancer: {}
+- kind: PersistentVolumeClaim
+  apiVersion: v1
+  metadata:
+    name: '${APPLICATION_NAME}-postgresql-data'
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1Gi
+- kind: PersistentVolumeClaim
+  apiVersion: v1
+  metadata:
+    name: sonarqube
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1Gi
 - apiVersion: v1
   kind: DeploymentConfig
   metadata:
@@ -109,7 +129,8 @@ objects:
         restartPolicy: Always
         volumes:
           - name: '${APPLICATION_NAME}-postgresql-data'
-            emptyDir: {}
+            persistentVolumeClaim:
+              claimName: '${APPLICATION_NAME}-postgresql-data'
     triggers:
       - imageChangeParams:
           automatic: true
@@ -249,7 +270,8 @@ objects:
             imagePullPolicy: Always
         volumes:
         - name: sonarqube
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: sonarqube
         restartPolicy: Always
         terminationGracePeriodSeconds: 30
         dnsPolicy: ClusterFirst

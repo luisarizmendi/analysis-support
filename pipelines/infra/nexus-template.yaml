@@ -20,6 +20,16 @@ objects:
         kind: DockerImage
         name: quay.io/luisarizmendi/nexus3:${NEXUS_VERSION}
       name: ${NEXUS_VERSION}
+- kind: PersistentVolumeClaim
+  apiVersion: v1
+  metadata:
+    name: ${SERVICE_NAME}-data
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 10Gi
 - apiVersion: v1
   kind: DeploymentConfig
   metadata:
@@ -98,7 +108,8 @@ objects:
         terminationGracePeriodSeconds: 30
         volumes:
         - name: ${SERVICE_NAME}-data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: ${SERVICE_NAME}-data
     test: false
     triggers:
     - type: ConfigChange
