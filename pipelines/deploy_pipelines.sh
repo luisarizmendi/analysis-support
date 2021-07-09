@@ -36,7 +36,6 @@ oc adm policy add-scc-to-user privileged -z pipeline -n  analysis-cicd
 
 REGISTRY_URL="myregistry-quay-$namespace.$cluster_domain"
 
-sleep 60
 #            REGISTRY_URL=""
 #            while [ "$REGISTRY_URL" == "" ]
 #            do
@@ -54,7 +53,7 @@ STATUS=no
 while [ "$STATUS" != "" ]
 do
  STATUS=$(oc get pod --all-namespaces | grep -v Complete | grep -v Runn  | grep -v READY )
- sleep 10
+ sleep 60
 done
 
 
@@ -66,7 +65,12 @@ oc create secret docker-registry registry-auth-secret -n analysis-cicd --docker-
 oc create secret docker-registry registry-auth-secret -n analysis-prod --docker-server=$REGISTRY_URL --docker-username=quayadmin --docker-password=password
 oc secrets link default registry-auth-secret -n analysis-prod --for=pull
 
-
+STATUS=no
+while [ "$STATUS" != "" ]
+do
+ STATUS=$(oc get pod --all-namespaces | grep -v Complete | grep -v Runn  | grep -v READY )
+ sleep 60
+done
 
 
 

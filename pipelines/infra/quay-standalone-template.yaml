@@ -60,6 +60,9 @@ objects:
     - kind: ServiceAccount
       name: occli
       namespace: ${STORAGE_NAMESPACE}
+    - kind: ServiceAccount
+      name: occli
+      namespace: analysis-cicd
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: ClusterRole
@@ -200,8 +203,8 @@ objects:
             oc create -f  /tmp/pod.yaml
 
             IP_WORKER=$(oc describe pod example | grep Node | awk -F / '{print $2}' | head -n1)
-            #NODE_PORT_80=$(oc -n openshift-storage get svc s3 -o yaml | grep -A 1 s3-https | grep nodePort | awk -F ': ' '{print $2}')
-            NODE_PORT_80=32014
+            NODE_PORT_80=$(oc -n openshift-storage get svc s3 -o yaml | grep -A 1 s3-https | grep nodePort | awk -F ': ' '{print $2}')
+
             oc delete -f  /tmp/pod.yaml
 
 
