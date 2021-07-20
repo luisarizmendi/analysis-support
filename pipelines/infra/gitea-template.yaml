@@ -48,7 +48,7 @@ objects:
           name: ${APPLICATION_NAME}-postgresql
         name: ${APPLICATION_NAME}-postgresql
       spec:
-        serviceAccountName: ${APPLICATION_NAME}
+        serviceAccountName: default
         containers:
         - env:
           - name: POSTGRESQL_USER
