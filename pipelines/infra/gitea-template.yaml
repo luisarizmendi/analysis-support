@@ -7,13 +7,6 @@ metadata:
     iconClass: "icon-git"
   name: gitea-persistent
 objects:
-- kind: ServiceAccount
-  apiVersion: v1
-  metadata:
-    creationTimestamp: null
-    labels:
-      app: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}
 - kind: Service
   apiVersion: v1
   metadata:
@@ -169,7 +162,7 @@ objects:
           app: ${APPLICATION_NAME}
           deploymentconfig: ${APPLICATION_NAME}
       spec:
-        serviceAccountName: ${APPLICATION_NAME}
+        serviceAccountName: default
         containers:
         - image: "${GITEA_IMAGE}:${GITEA_VERSION}"
           imagePullPolicy: Always
