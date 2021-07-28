@@ -15,7 +15,7 @@ objects:
   kind: NooBaa
   metadata:
     name: noobaa
-    namespace: openshift-storage
+    namespace: ${STORAGE_NAMESPACE}
   spec:
     dbResources:
       requests:
@@ -35,7 +35,7 @@ objects:
     labels:
       app: noobaa
     name: noobaa-pv-backing-store
-    namespace: openshift-storage
+    namespace: ${STORAGE_NAMESPACE}
   spec:
     pvPool:
       numVolumes: 1
@@ -51,18 +51,18 @@ objects:
   kind: ServiceAccount
   metadata:
     name: occli
-    namespace: openshift-storage
+    namespace: ${STORAGE_NAMESPACE}
 
 
 - kind: RoleBinding
   apiVersion: rbac.authorization.k8s.io/v1
   metadata:
     name: occli-permission
-    namespace: openshift-storage
+    namespace: ${STORAGE_NAMESPACE}
   subjects:
     - kind: ServiceAccount
       name: occli
-      namespace: openshift-storage
+      namespace: ${STORAGE_NAMESPACE}
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: ClusterRole
@@ -72,7 +72,7 @@ objects:
 - apiVersion: batch/v1
   kind: Job
   metadata:
-    namespace: openshift-storage
+    namespace: ${STORAGE_NAMESPACE}
     name: noobaa-patch
   spec:
     activeDeadlineSeconds: 1400
@@ -116,7 +116,7 @@ objects:
   apiVersion: route.openshift.io/v1
   metadata:
     name: s3-insecure
-    namespace: openshift-storage
+    namespace: ${STORAGE_NAMESPACE}
     labels:
       app: noobaa
       noobaa-s3-svc: 'true'
@@ -317,3 +317,9 @@ parameters:
   name: REGISTRY_NAME
   required: true
   value: myregistry
+
+
+- displayName: Storage namespace
+  name: STORAGE_NAMESPACE
+  required: true
+  value: openshift-storage
