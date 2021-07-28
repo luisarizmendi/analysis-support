@@ -184,6 +184,10 @@ objects:
             done 
 
 
+
+            ############### Workaround to not use a more privileged service account
+            
+
             cat <<EOF > /tmp/pod.yaml
             apiVersion: v1
             kind: Pod
@@ -207,7 +211,7 @@ objects:
 
             oc delete -f  /tmp/pod.yaml
 
-
+            ###############################################################
 
             cat <<EOF > /tmp/config.yaml
             DISTRIBUTED_STORAGE_CONFIG:
