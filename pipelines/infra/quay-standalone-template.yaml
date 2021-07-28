@@ -10,12 +10,12 @@ metadata:
 objects:
 
 
-## NOOBAA PART   
+## NOOBAA PART
 - apiVersion: noobaa.io/v1alpha1
   kind: NooBaa
   metadata:
     name: noobaa
-    namespace: ${STORAGE_NAMESPACE}
+    namespace: openshift-storage
   spec:
     dbResources:
       requests:
@@ -35,51 +35,34 @@ objects:
     labels:
       app: noobaa
     name: noobaa-pv-backing-store
-    namespace: ${STORAGE_NAMESPACE}
+    namespace: openshift-storage
   spec:
     pvPool:
       numVolumes: 1
       resources:
         requests:
-          storage:  ${STORAGE_SIZE} 
-      storageClass: ${STORAGE_CLASS_NAME} 
+          storage:  ${STORAGE_SIZE}
+      storageClass: ${STORAGE_CLASS_NAME}
     type: pv-pool
 
-- apiVersion: v1
-  kind: ServiceAccount
-  metadata:
-    name: occli
-    namespace: ${STORAGE_NAMESPACE}
 
-- kind: RoleBinding
-  apiVersion: rbac.authorization.k8s.io/v1
-  metadata:
-    name: occli-permission
-    namespace: ${STORAGE_NAMESPACE}
-  subjects:
-    - kind: ServiceAccount
-      name: occli
-      namespace: ${STORAGE_NAMESPACE}
-    - kind: ServiceAccount
-      name: occli
-      namespace: analysis-cicd
-  roleRef:
-    apiGroup: rbac.authorization.k8s.io
-    kind: ClusterRole
-    name: admin
 
 - apiVersion: v1
   kind: ServiceAccount
   metadata:
     name: occli
+    namespace: openshift-storage
+
 
 - kind: RoleBinding
   apiVersion: rbac.authorization.k8s.io/v1
   metadata:
     name: occli-permission
+    namespace: openshift-storage
   subjects:
     - kind: ServiceAccount
       name: occli
+      namespace: openshift-storage
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: ClusterRole
@@ -89,10 +72,10 @@ objects:
 - apiVersion: batch/v1
   kind: Job
   metadata:
-    namespace: ${STORAGE_NAMESPACE}
+    namespace: openshift-storage
     name: noobaa-patch
   spec:
-    activeDeadlineSeconds: 400
+    activeDeadlineSeconds: 1400
     completions: 1
     parallelism: 1
     template:
@@ -102,7 +85,7 @@ objects:
           - /bin/bash
           - -x
           - -c
-          - |   
+          - |
             STATUS=""
             while [ "$STATUS" != "Ready" ]
             do
@@ -128,7 +111,47 @@ objects:
         serviceAccountName: occli
 
 
-## QUAY PART   
+
+- kind: Route
+  apiVersion: route.openshift.io/v1
+  metadata:
+    name: s3-insecure
+    namespace: openshift-storage
+    labels:
+      app: noobaa
+      noobaa-s3-svc: 'true'
+  spec:
+    to:
+      kind: Service
+      name: s3
+      weight: 100
+    port:
+      targetPort: s3
+    wildcardPolicy: None
+
+
+## QUAY PART
+
+
+
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: occli
+
+- kind: RoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: occli-permission
+  subjects:
+    - kind: ServiceAccount
+      name: occli
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: admin
+
+
 
 - apiVersion: objectbucket.io/v1alpha1
   kind: ObjectBucketClaim
@@ -161,7 +184,7 @@ objects:
           - /bin/bash
           - -x
           - -c
-          - |   
+          - |
             bucket_name=""
             while [ "$bucket_name" == "" ]
             do
@@ -181,37 +204,15 @@ objects:
             do
               sleep 5
               secret_key=$(oc get secret quay-object -o yaml | grep AWS_SECRET_ACCESS_KEY | awk -F ': ' '{print $2}' | grep -v { | base64 -d)
-            done 
+            done
 
-
-
-            ############### Workaround to not use a more privileged service account
-            
-
-            cat <<EOF > /tmp/pod.yaml
-            apiVersion: v1
-            kind: Pod
-            metadata:
-              name: example
-              labels:
-                app: hello-openshift
-              namespace: analysis-cicd
-            spec:
-              containers:
-                - name: hello-openshift
-                  image: openshift/hello-openshift
-                  ports:
-                    - containerPort: 8080
-            EOF
-
-            oc create -f  /tmp/pod.yaml
-
-            IP_WORKER=$(oc describe pod example | grep Node | awk -F / '{print $2}' | head -n1)
-            NODE_PORT_80=$(oc -n openshift-storage get svc s3 -o yaml | grep -A 1 s3 | grep nodePort | awk -F ': ' '{print $2}' | head -n 1)
-
-            oc delete -f  /tmp/pod.yaml
-
-            ###############################################################
+            ## Workaround to not using a privileged service account in openshift-storage: create a service+route and check the default domain
+            oc create service clusterip test --tcp=5678:8080
+            oc create route edge test --service=test
+            DOMAIN=$(oc describe route test | grep "Requested Host:" | awk '{print $3}' | awk -F '.apps.' '{print $2}')
+            oc delete route test
+            oc delete service test
+            S3_HOSTNAME=s3-insecure-openshift-storage.apps.$DOMAIN
 
             cat <<EOF > /tmp/config.yaml
             DISTRIBUTED_STORAGE_CONFIG:
@@ -219,9 +220,9 @@ objects:
                     - RHOCSStorage
                     - access_key: $access_key
                       bucket_name: $bucket_name
-                      hostname: $IP_WORKER
+                      hostname: $S3_HOSTNAME
                       is_secure: false
-                      port: "$NODE_PORT_80"
+                      port: "80"
                       secret_key: $secret_key
                       storage_path: /datastorage/registry
             DISTRIBUTED_STORAGE_DEFAULT_LOCATIONS: []
@@ -247,6 +248,8 @@ objects:
             EOF
 
             oc create secret generic quay-config --from-file config.yaml=/tmp/config.yaml
+
+
 
             cat <<EOF > /tmp/quay.yaml
             apiVersion: quay.redhat.com/v1
@@ -314,8 +317,3 @@ parameters:
   name: REGISTRY_NAME
   required: true
   value: myregistry
-
-- displayName: Storage namespace
-  name: STORAGE_NAMESPACE
-  required: true
-  value: openshift-storage
