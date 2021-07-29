@@ -271,11 +271,20 @@ objects:
 
 
             RETURN=0
+            retry=0
             while [ $RETURN != "200" ]
             do
               echo "waiting for Quay..."
               RETURN=$(curl -k -sL -o /dev/null -w "%{http_code}" $QUAY_HOST)
               sleep 15
+              ((retry=retry+1))
+              if [[ "$retry" == 15 ]]
+              then
+                oc delete -f  /tmp/quay.yaml
+                retry=0
+                sleep 5
+                oc create -f  /tmp/quay.yaml
+              fi
             done
 
 
