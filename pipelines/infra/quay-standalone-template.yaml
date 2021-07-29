@@ -282,7 +282,7 @@ objects:
               then
                 oc delete -f  /tmp/quay.yaml
                 retry=0
-                sleep 5
+                sleep 30
                 oc create -f  /tmp/quay.yaml
               fi
             done
