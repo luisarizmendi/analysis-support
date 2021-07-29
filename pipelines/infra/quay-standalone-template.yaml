@@ -278,7 +278,7 @@ objects:
               RETURN=$(curl -k -sL -o /dev/null -w "%{http_code}" $QUAY_HOST)
               sleep 10
               ((retry=retry+1))
-              if [[ "$retry" == 2 ]]
+              if [[ "$retry" == 4 ]]
               then
                 oc delete -f  /tmp/quay.yaml
                 retry=0
