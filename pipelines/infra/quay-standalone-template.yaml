@@ -276,8 +276,7 @@ objects:
             do
               echo "waiting for Quay..."
               RETURN=$(curl -k -sL -o /dev/null -w "%{http_code}" $QUAY_HOST)
-              sleep 10
-              ((retry=retry+1))
+              sleep 15
               if [[ "$retry" == 4 ]]
               then
                 oc delete -f  /tmp/quay.yaml
@@ -285,6 +284,7 @@ objects:
                 sleep 30
                 oc create -f  /tmp/quay.yaml
               fi
+              ((retry=retry+1))
             done
 
 
